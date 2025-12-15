@@ -23,10 +23,10 @@ async def upgrade_clickhouse():
                     "id"                String  NOT NULL PRIMARY KEY,
                     "name"              String NOT NULL,
                     "domain"            String NOT NULL,
-                    "founded_date"      Int32 ,
+                    "founded_date"      Nullable(Int32),
                     "short_description" String NOT NULL,
-                    "total_funding_usd" Int32          ,
-                    "employee_count"     Int32          NOT NULL
+                    "total_funding_usd" Nullable(Int64),
+                    "employee_count"    Nullable(Int32)
                 );
                 """
     await clickhouse_client.execute(migration)
@@ -44,53 +44,44 @@ async def upgrade_clickhouse():
                 """
     await clickhouse_client.execute(migration)
 
-    query = """
-    INSERT INTO default.company
-    (
-        id,
-        name,
-        domain,
-        founded_date,
-        short_description,
-        total_funding_usd,
-        employee_count
-    )
-    VALUES (%s, %s, %s, %s, %s, %s, %s)
-    """
-
-
     with open(Path(__file__).resolve().with_name("companies.csv"), mode="r", encoding="utf-8") as f:
-        reader = csv.DictReader(f.read().splitlines())
+        batch = []
+        reader = csv.DictReader(f)
         for row in reader:
-            await clickhouse_client.execute(
-                query,
-                (
-                    row["company_id"],
-                    row["company_name"],
-                    row["domain"],
-                    int(row["founded_date"]) if row["founded_date"] else None,
-                    row["short_description"],
-                    int(row["total_funding_usd"]) if row["total_funding_usd"] else None,
-                    int(row["employee_count"]) if row["employee_count"] else None,
-                ),
-            )
+            batch.append([
+                row["company_id"],
+                row["company_name"],
+                row["domain"],
+                int(row["founded_date"]) if row["founded_date"] else None,
+                row["short_description"],
+                int(row["total_funding_usd"]) if row["total_funding_usd"] else None,
+                int(row["employee_count"]) if row["employee_count"] else None,
+            ])
+    await clickhouse_client.client.insert("company", batch, column_names=["id",
+                                                                  "name",
+                                                                  "domain",
+                                                                  "founded_date",
+                                                                  "short_description",
+                                                                  "total_funding_usd",
+                                                                  "employee_count"])
+
 
 async def upgrade(db: BaseDBAsyncClient) -> str:
     await upgrade_clickhouse()
     return """
-            DROP TABLE IF EXISTS "user_company_status";
-            DROP TABLE IF EXISTS "user";
-            CREATE TABLE "user"
-            (
-                "id"     SERIAL      NOT NULL PRIMARY KEY,
-                "userid" VARCHAR(32) NOT NULL UNIQUE
-            );
-                
+           DROP TABLE IF EXISTS "user_company_status";
+           DROP TABLE IF EXISTS "user";
+           CREATE TABLE "user"
+           (
+               "id"     SERIAL      NOT NULL PRIMARY KEY,
+               "userid" VARCHAR(32) NOT NULL UNIQUE
+           );
+
            CREATE TABLE IF NOT EXISTS "user_company_status"
            (
                "id"         SERIAL      NOT NULL PRIMARY KEY,
                "liked"      BOOL,
-               "viewed"     BOOL        DEFAULT FALSE,
+               "viewed"     BOOL DEFAULT FALSE,
                "company_id" VARCHAR(24) NOT NULL, --REFERENCES "company" ("id") ON DELETE CASCADE,
                "user_id"    VARCHAR(32) NOT NULL REFERENCES "user" ("userid") ON DELETE CASCADE,
                CONSTRAINT "uid_user_compan_company_d18969" UNIQUE ("company_id", "user_id")
