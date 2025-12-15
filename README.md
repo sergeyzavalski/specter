@@ -1,3 +1,6 @@
+## Remarks
+- statuses replaced with bool (viewed, liked) columns instead of single varchar column
+- viewed can be replaced with viewed_at (timestamp)
 
 ## Tasks
 
