@@ -1,0 +1,9 @@
+asyncpg==0.31.0
+aerich==0.9.1
+clickhouse-connect==0.10.0
+fastapi==0.124.4
+fastapi-filter==2.0.1
+pydantic==2.12.5
+pydantic-settings==2.12.0
+structlog==25.5.0
+uvicorn==0.35.0
